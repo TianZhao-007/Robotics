@@ -12,6 +12,7 @@ q = 2*pi/total_time;
 scale_parameter = 5.33e-3;
 wheel_track = 0.156;
 
+
 left_wheel_speed = (u * 2/scale_parameter - q * wheel_track / scale_parameter)/2;
 right_wheel_speed = (u * 2/scale_parameter + q * wheel_track / scale_parameter)/2;
 

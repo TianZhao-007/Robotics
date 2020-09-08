@@ -12,19 +12,24 @@ classdef piBotSim < handle
         simRobotTrail = []; % A vector storing the robot's position over time.
         simRobotTrailLine; % A plot of the robot's position over time.
         simRobotTriangle; % A triangle at the current position and angle of the robot.
+        simLandmarkMarkers; % Square markers showing the positions of the landmarks.
+        simLandmarkLabels; % Text labels showing the id numbers of the landmarks.
+        simRobotViewCapture; % The shape of the robot's view of landmarks.
         simDelayTimer = nan; % The timer used to keep the simulation in real-time.
     end
     
     % States to be set upon instantiation of the simulator.
     properties(GetAccess = private, SetAccess = immutable)
         floorImage = imread("floor.jpg"); % The image used to make the floor.
+        worldLandmarkNumber = 20; % The number of landmarks in the world
+        worldLandmarkPositions; % The positions of the landmarks (2xn) (m)
     end
     
     % Static parameters of the world and robot
     properties(Constant)
         simTimeStep = 0.1; % The duration of each step of the simulator (s).
         robotWheelVelScale = 5.33e-3; % The scaling applied to wheel velocities (tk/s).
-        robotWheelVelNoise = 0.5; % Variance of the Gaussian noise added to the wheel velocities.
+        robotWheelVelNoise = 2.0/50; % Variance of the Gaussian noise added to the wheel velocities.
         robotMeasureNoisePosition = 0.005; % Variance of the Gaussian noise added to position measurements.
         robotMeasureNoiseAngle = 0.08; % Variance of the Gaussian noise added to angle measurements.
         robotWheelTrack = 0.156; % The distance between the robot wheels (m).
@@ -34,15 +39,32 @@ classdef piBotSim < handle
         robotCameraHeight = 0.1; % The height of the camera from the ground (m).
         robotCameraR = [0,-1,0;0,0,-1;1,0,0]'; % The orienation of the camera w.r.t. the robot.
         robotCameraRef = imref2d([200,400]); % Size of the camera output image.
+        worldARUCOSize = 0.08; % Size of ARUCO landmarks (m).
+        worldARUCONoise = 0.01; % Noise on projection measurement of ARUCO landmarks.
+        worldLandmarkMinDist = 0.2; % Minimum distance between generated landmarks.
+        % The following three parameters are used to determine which
+        % landmarks are in view of the robot.
+        robotLandmarkViewAngle = 45 * pi/180; % Maximum absolute angle of landmarks from the robot x axis (rad).
+        robotLandmarkDistMin = 0.1; % Minimum distance of landmarks from the robot (m)
+        robotLandmarkDistMax = 3.0; % Maximum distance of landmarks from the robot (m)
     end
     
     % The interface methods of the robot simulator
     methods
-        function self = piBotSim(varargin)
+        function self = piBotSim(floorImageFName, landmarkPositions)
             % Constructor of the simulator
-            if numel(varargin) >= 1
+            if nargin >= 1
                 % Read the provided floor image
-                self.floorImage = imread(varargin{1});
+                self.floorImage = imread(floorImageFName);
+            end
+            if nargin >= 2
+                % Use the provided landmark number and positions
+                self.worldLandmarkNumber = size(landmarkPositions,2);
+                self.worldLandmarkPositions = landmarkPositions;
+            else
+                % Generate n random landmarks
+                self.worldLandmarkPositions = rand(2,self.worldLandmarkNumber) .* self.worldBoundaries(:,2);
+                self.worldLandmarkPositions = self.ensureMinimumDist(self.worldLandmarkPositions, self.worldLandmarkMinDist);
             end
             
             % Initialise the robot trail.
@@ -60,8 +82,8 @@ classdef piBotSim < handle
             % PB.simulate() integrates the dynamics of the simulation for a period of
             % PiBotSim.simTimeStep.
             %
-            % PB.setVelocity(duration) integrates the dynamics of the simulation for
-            % the duration specified in steps of PiBotSim.simTimeStep.
+            % PB.simulate(duration) integrates the dynamics of the simulation for
+            % the duration specified in steps of length PiBotSim.simTimeStep.
             
             % Handle the duration being given.
             if length(varargin) == 1
@@ -74,7 +96,7 @@ classdef piBotSim < handle
             
             % Integrate the (noisy) kinematics of the robot
             self.integrateRobotKinematics(min(self.commandDuration, self.simTimeStep));
-            self.commandDuration = self.commandDuration - self.simTimeStep;
+            self.commandDuration = max(self.commandDuration - self.simTimeStep, 0);
             
             % Update the robot trail
             self.simRobotTrail(:,1:end-1) = self.simRobotTrail(:,2:end);
@@ -97,6 +119,7 @@ classdef piBotSim < handle
             end
             pause(self.simTimeStep - toc(self.simDelayTimer));
             self.simDelayTimer = tic;
+            
         end
                 
         
@@ -229,7 +252,7 @@ classdef piBotSim < handle
             'FillValues', [220, 220, 220]);
         
             % Advance the world.
-            self.simulate()
+            self.simulate();
         end
         
         
@@ -263,6 +286,46 @@ classdef piBotSim < handle
             save("robot_trail.mat", "simRobotTrail");
         end
         
+        function [landmarks, idnumbers] = measureLandmarks(self)
+            %PiBotSim.measureLandmarks()  Measure landmarks from the robot POV.
+            %
+            % [landmarks, idnumbers] = PB.measureLandmarks() returns the landmark
+            % measurements (in the robot frame) and the id numbers of the landmarks
+            % that were measured.
+
+            R = self.rmat(self.robotAngle);
+            t = self.robotPosition;
+            
+            % Identify which landmarks are visible
+            landmarks = R' * (self.worldLandmarkPositions - t);
+            landmarkAngles = atan2(landmarks(2,:), landmarks(1,:));
+            landmarkDistances = vecnorm(landmarks);
+            viewAngle = 45*pi/180;
+            landmarksInView = (abs(landmarkAngles) < self.robotLandmarkViewAngle) & ...
+                    (landmarkDistances > self.robotLandmarkDistMin) & ...
+                    (landmarkDistances < self.robotLandmarkDistMax);
+            
+            % Simulate a realistic measurements
+            idnumbers = find(landmarksInView);
+            
+            for i = idnumbers
+                landmarks(:,i) = self.applyARUCONoise(landmarks(:,i));
+            end
+            
+            landmarks = landmarks(:, idnumbers);
+        end
+        
+        function showLandmarks(self, flag)
+            % Show landmarks if flag is true and hide if flag is false.
+            self.simLandmarkMarkers.Visible = flag;
+            for i = 1:self.worldLandmarkNumber
+                self.simLandmarkLabels(i).Visible = flag;
+            end
+        end
+        
+        function showViewRange(self, flag)
+           self.simRobotViewCapture.Visible = flag; 
+        end
     end
 
     % Internal methods
@@ -270,7 +333,8 @@ classdef piBotSim < handle
         
         function integrateRobotKinematics(self, dt)
             % Integrate the kinematics of the robot.
-            [v,omega] = self.forwardKinematics(self.robotWheelVelocity + self.wheelNoise());
+            wheel_noise = self.wheelNoise(norm(self.robotWheelVelocity));
+            [v,omega] = self.forwardKinematics(self.robotWheelVelocity + wheel_noise);
 
             theta_t = self.robotAngle + dt * omega;
             if (omega == 0)
@@ -288,14 +352,29 @@ classdef piBotSim < handle
             % draw the current state of the world and the robot in it
             currentHold = ishold();
             
+            % First draw the floor
             imshow(self.floorImage, imref2d([size(self.floorImage,1), size(self.floorImage,2)], [0,5], [0,5]));
             hold on
+            
+            % Draw the robot trail
             self.simRobotTrailLine = plot(self.simRobotTrail(1,:), self.simRobotTrail(2,:), 'r', 'LineWidth', 2);
             
+            % Draw the robot itself
             trianglePts = 0.07*[cos(2*pi/3*(0:2));sin(2*pi/3*(0:2))];
             trianglePts = self.rmat(self.robotAngle) * trianglePts + self.robotPosition;
             self.simRobotTriangle = fill(trianglePts(1,:), trianglePts(2,:), 'y');
             
+            % Draw landmarks
+            self.simLandmarkMarkers = plot(self.worldLandmarkPositions(1,:), self.worldLandmarkPositions(2,:), 'ks', ...
+                'MarkerSize',20, 'MarkerFaceColor','w');
+            markerLabels = 1:self.worldLandmarkNumber;
+            self.simLandmarkLabels = text(self.worldLandmarkPositions(1,:), self.worldLandmarkPositions(2,:), string(markerLabels), ...
+                'HorizontalAlignment', 'center');
+            
+            % Draw robot view range
+            self.simRobotViewCapture = plot(0,0, 'g');
+            
+            % Set axes appropriately
             axis equal;
             xlim(self.worldBoundaries(1,:));
             ylim(self.worldBoundaries(2,:));            
@@ -306,6 +385,7 @@ classdef piBotSim < handle
             if ~currentHold
                 hold off
             end
+            self.updateDrawWorld();
         end
         
         function updateDrawWorld(self)
@@ -316,6 +396,19 @@ classdef piBotSim < handle
             trianglePts = 0.07*[cos(2*pi/3*(0:2));sin(2*pi/3*(0:2))];
             trianglePts = self.rmat(self.robotAngle) * trianglePts + self.robotPosition;
             self.simRobotTriangle.Vertices = trianglePts';
+            
+            % Update the view range if enabled
+            if self.simRobotViewCapture.Visible
+                % Create the top arc followed by the bottom arc in reverse
+                viewMaxArcPts = self.robotLandmarkDistMax * [cos(-self.robotLandmarkViewAngle:0.02:self.robotLandmarkViewAngle);
+                                                             sin(-self.robotLandmarkViewAngle:0.02:self.robotLandmarkViewAngle)];
+                viewMinArcPts = self.robotLandmarkDistMin * [cos(-self.robotLandmarkViewAngle:0.02:self.robotLandmarkViewAngle);
+                                                             sin(-self.robotLandmarkViewAngle:0.02:self.robotLandmarkViewAngle)];
+                viewArcPts = [viewMaxArcPts, viewMinArcPts(:, end:-1:1), viewMaxArcPts(:,1)];
+                viewArcPts = self.rmat(self.robotAngle) * viewArcPts + self.robotPosition;
+                self.simRobotViewCapture.XData = viewArcPts(1,:);
+                self.simRobotViewCapture.YData = viewArcPts(2,:);
+            end
             
             drawnow
         end
@@ -346,8 +439,27 @@ classdef piBotSim < handle
             flag = all(position >= piBotSim.worldBoundaries(:,1)) && all(position <= piBotSim.worldBoundaries(:,2));
         end
         
-        function noise = wheelNoise() 
-            noise = randn(1,2) * piBotSim.robotWheelVelNoise;
+        function noise = wheelNoise(speed) 
+            noise = randn(1,2) * piBotSim.robotWheelVelNoise * abs(speed);
+        end
+        
+        function noisy_lm = applyARUCONoise(lm)
+            % Apply realistic noise to a landmark measurement
+            % Compute projected square sides
+            squareprojL = (lm(2) - piBotSim.worldARUCOSize/2) / lm(1);
+            squareprojR = (lm(2) + piBotSim.worldARUCOSize/2) / lm(1);
+            % Add some noise
+            squareprojL = squareprojL + randn()*piBotSim.worldARUCONoise;
+            squareprojR = squareprojR + randn()*piBotSim.worldARUCONoise;
+            % Compute the landmark from this
+            lmproj = (squareprojL + squareprojR)/2;
+            lm1 = piBotSim.worldARUCOSize / (squareprojR - squareprojL);
+            % Make sure depth is in range
+            if lm1 < 0 || lm1 > 10
+                lm1 = 10;
+            end
+            
+            noisy_lm = [lm1 ; lmproj * lm1];
         end
         
         function R = rmat(th)
@@ -357,6 +469,29 @@ classdef piBotSim < handle
         function R = rotz(th)
             R = [piBotSim.rmat(th), [0;0]; 0,0,1];
         end
+        
+        function points = ensureMinimumDist(points, d)
+            % Ensure all points are at least d apart.
+            % Otherwise, regenerate
+            n = size(points,2);
+            d2 = d*d;
+            max_reps = 50;
+            for i = 1:(n-1)
+                for rep = 1:max_reps
+                    % Check the distances
+                    diffs = points(:,(i+1):end) - points(:,i);
+                    distsSquared = diffs(1,:).^2 + diffs(2,:).^2;
+                    if any(distsSquared < d2)
+                        % Resample
+                        points(:,i) = rand(2,1) .* piBotSim.worldBoundaries(:,2);
+                    else
+                        break
+                    end
+                end
+                assert(rep ~= max_reps, "Maximum repetitions reached in distributing landmarks.");
+            end
+        end
+        
     end
 end
 

@@ -1,11 +1,11 @@
 % Calibrate the scale parameter and wheel track of the robot
-addpath("../engn4627_pibot_simulator/"); % Add the simulator to the MATLAB path.
+addpath("../simulator/"); % Add the simulator to the MATLAB path.
 pb = piBotSim("floor.jpg");
 
 % The answers must be saved with the following names!
 % Otherwise, the evaluation system will not be able to recognise them.
-scale_parameter = 0.005356120444834 ;
-wheel_track =  0.156919596451389; 
+scale_parameter =  0.005345095355462 ;
+wheel_track =  0.155355064097791; 
                                                                                           
 % Write your code to compute scale_parameter and wheel_track below.
 % HINTS:
@@ -24,7 +24,7 @@ wheel_track =  0.156919596451389;
     % let car drive for 5s, wl = wr = w0  (from 5 to 100 with 5 interval)
     wl = 1;
     wr = 1;
-    t = 0.2;
+    t = 1;
     for i = 1:100
     %place the car in (0.5,0.5) with angle = 0
     pb.place([0.5;0.5],0);
@@ -43,16 +43,19 @@ wheel_track =  0.156919596451389;
     wr = wr + 1;
     end
 
-    % store the value of scale_parameter
-    X = [ones(100,1) X];
-    b = X\Y;
-    scale_parameter = b(2);
+    % APPLY least second method
+    Sxx = sum((X-mean(X)).^2);
+    Sxy  = sum((X-mean(X)).*(Y-mean(Y)));
+    k0=Sxy/Sxx;
+    b0=mean(Y)-k0*mean(X);
+    y0=k0*X+b0;
+    scale_parameter = k0;
 
  % compute wheel_track
  % let car drive for 5s, wl = -wr = w1 (wl from 5 to 100
     wl = 1;
     wr = -1;
-    t = 0.2;
+    t = 1;
     for i = 1:100
     %place the car in (0.5,0.5) with angle = 0
     pb.place([0.5;0.5],0);
@@ -70,11 +73,14 @@ wheel_track =  0.156919596451389;
     wl = wl + 1;
     wr = wr - 1;
     end
-    % store the value of wheel_tack
-    X1 = [ones(100,1)  X1];
-    b = X1\Y1;
-    wheel_track = -2*scale_parameter/b(2);
+    % apply least second
+    Lxx=sum((X1-mean(X1)).^2);
+    Lxy=sum((X1-mean(X1)).*(Y1-mean(Y1)));
+    k1=Lxy/Lxx;
+    b1=mean(Y1)-k1*mean(X1);
+    y1=k1*X1+b1;
+    wheel_track = -2*scale_parameter/k1;
     
-   wheel_track
-   scale_parameter
-
+    % ommit the plot code
+ 
+   

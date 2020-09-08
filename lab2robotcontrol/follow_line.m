@@ -1,5 +1,5 @@
 % Calibrate the scale parameter and wheel track of the robot
-addpath("../engn4627_pibot_simulator/"); % Add the simulator to the MATLAB path.
+addpath("../simulator/"); % Add the simulator to the MATLAB path.
 pb = piBotSim("floor_spiral.jpg");
 
 % Write your code to compute identify and follow lines below.
@@ -11,9 +11,12 @@ pb.place([2.5;2.5], 0);
 figure;
 camAxes = axes();
 
+% [position,angler] = pb.measure;
+% state = [position(1);position(2);angler];
+
 % Follow the line in a loop
+
 while true
-    
     % First, get the current camera frame
     img = pb.getCamera();
     imshow(img,'parent',camAxes);
@@ -25,7 +28,7 @@ while true
     [rows,cols] = find(line_img);
     
     if isempty(rows)||isempty(cols)
-        u = 0.05;
+        u = 0.03;
         q = 0.0;
         [wl,wr] = inverse_kinematics(u,q);
         pb.setVelocity([wl,wr],1);
@@ -35,19 +38,24 @@ while true
     x_mean = (mean(cols) - 400/2) / 400;
     y_mean = (mean(rows) - 31/2) /31;
     % Use the line centre to compute a velocity command
-    u = 0.1 * (1-x_mean^2); % replace with computed values!
-    q = -2 * x_mean; % replace with computed values!
-    
+    u = 0.15 * (1-2*x_mean^2); % replace with computed values!
+    q = -8 * x_mean; % replace with computed values!
+
+   % new_state = integrate_kinematics(state, 0.1, u,q );
+   % state = new_state
+   % t = t +0.1
+   
     % Compute the required wheel velocities
     [wl, wr] = inverse_kinematics(u,q);
     
     % Apply the wheel velocities
     pb.setVelocity(wl,wr);
+    
+
 end
 
-
+pb.saveTrail();
 % Save the trajectory of the robot to a file.
 % You must use this function at the very end of your script, or the
 % evaluation system will not recognise that you have completed the line
 % following task.
-

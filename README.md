@@ -1,5 +1,8 @@
 # Robotics
-This repo mainly record robotics content.(Based on differential drive robot)
+This repo mainly records the process of learning robotics.  
+Based on differential drive car, the learning flow starts form kinematics.  
+Then,the differential drive car use control algorithm to follow a specific course.  
+Next,introducing VO aims to tell the robot where it is.
 
 
 ### kinematics  

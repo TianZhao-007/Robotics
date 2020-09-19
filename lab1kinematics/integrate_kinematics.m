@@ -23,6 +23,8 @@ end
 
 end
 
+% here is the wrong solution 
+% only meaningful for q = 0
 
  % a = [cos(state(3)) 0; sin(state(3)) 0; 0 1];
  

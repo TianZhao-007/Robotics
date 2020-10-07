@@ -22,6 +22,8 @@ non-holonomic是速度上的约束，告诉你哪里不能走，但你依然可�
   1. change of coordinates: Same vetor but written in different frame.  
   2. Change of reference: Same point written with respect to two different observers.  
   
+* Model derivation(foward kinematics)  
+  
 ### wheel odometry  
 * noise distribution  
 THE noise is like a banana.  

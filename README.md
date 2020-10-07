@@ -1,3 +1,12 @@
+- [Robotics](#robotics)
+    + [kinematics](#kinematics)
+    + [wheel odometry](#wheel-odometry)
+    + [Visual Odometry](#visual-odometry)
+    + [Kalman filter](#kalman-filter)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+
 # Robotics
 This repo mainly records the process of learning robotics.  
 Based on differential drive car, the learning flow starts form kinematics.  

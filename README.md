@@ -52,6 +52,8 @@ That is, the relation between u,q and wl,wr.
 
 ### Control knowledge  
 
+### EKF-SLAM  
+
 
 
 

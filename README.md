@@ -50,5 +50,15 @@ That is, the relation between u,q and wl,wr.
 * possiblity  
 
 
+### Control knowledge  
+
+### EKF-SLAM  
+Extended Kalman filter (EKF) is applied for solving the SLAM problem.   
+Predict - Augment - unpdate  
+
+     
+    
+
+
 
 

@@ -31,3 +31,43 @@ end
  % b = [lin_velocity ; ang_velocity];
  
  % new_state = state +  dt * a * b;
+
+
+ function xdot = fcn(x,u)
+mr=0.095;
+mp=0.024;
+lr=0.085;
+lp=0.129;
+jr=5.7e-5;
+jp=3.3e-5;
+kt=0.042;
+rm=8.4;
+dr=0.0015;
+dp=0.0005;
+k=0.017;
+g=9.8;
+jt=jp*mp*lr*lr+jr*jp+0.25*jr*mp*lp*lp;
+a31=-1*(jp+0.25*mp*lp*lp)*k/jt;
+a32=0.25*mp*mp*lp*lp*lr*g/jt;
+a33=-1*(jp+0.25*mp*lp*lp)*dr/jt;
+a34=0.5*mp*lp*lr*dp/jt;
+a41=0.5*mp*lp*lr*k/jt;
+a42=-0.5*mp*lp*g*(jr+mp*lr*lr)/jt;
+a43=0.5*mp*lp*lr*dr/jt;
+a44=-1*(jr+mp*lr*lr)*dp/jt;
+b31=(jp+0.25*mp*lp*lp)/jt;
+b41=-0.5*mp*lp*lr/jt;
+The_A=[0 0 1 0
+0 0 0 1
+a31 a32 a33 a34
+a41 a42 a43 a44];
+The_B=[0 0 0 0
+0 0 0 0
+b31 0 0 0
+b41 0 0 0];
+u1=[u
+    0
+    0
+    0];
+xdot=The_A*x+The_B*u1;
+end
